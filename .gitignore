@@ -1,3 +1,4 @@
+# Virtual env + editor + build artifacts
 .venv/
 __pycache__/
 *.pyc
