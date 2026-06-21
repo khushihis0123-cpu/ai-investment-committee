@@ -109,9 +109,11 @@ def run_monte_carlo(ticker: str, num_sims: int = 1000, days: int = 252, outfile:
         plt.ylabel("Price")
         plt.grid(alpha=0.3)
 
-        # Save plot
+        # Save plot into relative outputs/ (ephemeral runtime in Cloud)
         if outfile is None:
-            outfile = f"monte_carlo_{ticker}.png"
+            out_dir = os.path.join(os.getcwd(), "outputs")
+            os.makedirs(out_dir, exist_ok=True)
+            outfile = os.path.join(out_dir, f"monte_carlo_{ticker}.png")
         plt.tight_layout()
         plt.savefig(outfile, dpi=150)
         plt.close()
