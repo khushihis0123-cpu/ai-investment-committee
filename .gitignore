@@ -8,3 +8,4 @@ __pycache__/
 .vscode/
 outputs/
 .streamlit/secrets.toml
+.streamlit/secrets.toml
