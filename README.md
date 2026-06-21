@@ -38,6 +38,26 @@ Key Features
 - Live data via Yahoo Finance (yfinance) for price history and fundamentals.
 - Interactive Streamlit dashboard with polished dark theme, agent badges, and simulation visualization.
 
+# ...existing code...
+
+## Monte Carlo assumptions
+Monte Carlo simulations use historical daily log returns to estimate GBM parameters. By default we use 252 trading days to annualize:
+- Drift = mean(daily log returns) * days_used
+- Annualized volatility = std(daily log returns) * sqrt(days_used)
+
+The UI surfaces these values next to the plot (drift and annualized volatility) so results are reproducible.
+
+## Agent debates / chair synthesis
+Agents run in parallel to produce independent votes. Optionally the runner supports debate rounds where each agent receives prior outputs (a `context`) and can revise its recommendation. The Chair aggregates votes — optionally via an LLM prompt — to produce:
+- major agreements
+- major disagreements
+- strongest bullish and bearish arguments
+- final recommendation + numeric confidence
+
+Enable debate rounds with the CLI flag `--debate-rounds N` or via the Streamlit UI controls (implemented in main.py / app.py).
+
+# ...existing code...
+
 Tech Stack
 ----------
 - Python 3.9+

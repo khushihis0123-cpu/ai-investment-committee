@@ -1,0 +1,16 @@
+test_market_data.py
+import math
+from market_data import get_market_data
+
+def test_get_market_data_smoke():
+    res = get_market_data("AAPL")
+    assert isinstance(res, dict)
+    assert "ticker" in res
+    price = res.get("price_last")
+    assert price is not None
+    assert isinstance(price, (int, float))
+    assert not math.isnan(float(price))
+
+test_hello.py
+def test_hello_world():
+    assert True == True

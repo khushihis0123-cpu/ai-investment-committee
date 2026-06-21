@@ -1,19 +1,34 @@
 import datetime
 import math
+import os
+from multiprocessing.util import info
 from typing import Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
+import streamlit as st
 import yfinance as yf
 
 
+# prefer Streamlit secret, then environment variable, then fallback sentinel
+API_KEY = st.secrets.get("ALPHA_VANTAGE_KEY") or os.getenv("ALPHA_VANTAGE_KEY") or "REPLACE_ME"
+
+
 def _safe_info_get(info: Dict[str, Any], keys: list) -> Optional[float]:
-    for k in keys:
-        if k in info and info[k] is not None:
-            try:
-                return float(info[k])
-            except Exception:
-                continue
+    """
+    Return the first present numeric value from keys in info, or None.
+    Do NOT include raw price keys when requesting ratio fields like P/E.
+    """
+    for k in keys or []:
+        if not k:
+            continue
+        v = info.get(k)
+        if v is None:
+            continue
+        try:
+            return float(v)
+        except Exception:
+            continue
     return None
 
 
@@ -76,7 +91,7 @@ def get_market_data(ticker: str) -> Dict[str, Any]:
             except Exception:
                 info = {}
 
-        current_pe = _safe_info_get(info, ["trailingPE", "peRatio", "trailingPERatio", "regularMarketPrice"])  # fallback ordering
+        current_pe = _safe_info_get(info, ["trailingPE", "peRatio", "trailingPERatio"])
         current_pb = _safe_info_get(info, ["priceToBook", "priceToBookTrailing12Months", "pbRatio"])
         debt_to_equity = _safe_info_get(info, ["debtToEquity", "totalDebt/totalStockholdersEquity", "debtToEquityRatio"])
 
