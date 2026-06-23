@@ -8,10 +8,17 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import yfinance as yf
+from streamlit.errors import StreamlitSecretNotFoundError
 
 
-# prefer Streamlit secret, then environment variable, then fallback sentinel
-API_KEY = st.secrets.get("ALPHA_VANTAGE_KEY") or os.getenv("ALPHA_VANTAGE_KEY") or "REPLACE_ME"
+# Prefer environment variable (local dev). Only try st.secrets if env var absent;
+# guard against missing secrets.toml to avoid StreamlitSecretNotFoundError.
+env_api = os.getenv("ALPHA_VANTAGE_KEY")
+try:
+    secret_api = st.secrets.get("ALPHA_VANTAGE_KEY")
+except StreamlitSecretNotFoundError:
+    secret_api = None
+API_KEY = env_api or secret_api or "REPLACE_ME"
 
 
 def _safe_info_get(info: Dict[str, Any], keys: list) -> Optional[float]:

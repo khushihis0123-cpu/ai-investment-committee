@@ -4,6 +4,19 @@ from typing import Dict, Any
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
+import traceback
+
+# Quick import guard: display any import/runtime error on the Streamlit page
+try:
+    # ...existing imports that may fail...
+    import market_data
+    import agents
+    # (keep additional imports as in your file)
+except Exception as e:
+    st.title("App failed to start")
+    st.error("Import/runtime error — see traceback below")
+    st.code(traceback.format_exc())
+    st.stop()
 
 # helper: select sim paths and compute metrics (must be defined before use)
 def _select_sim_paths(mc: Dict[str, Any]):
