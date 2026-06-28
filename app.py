@@ -150,11 +150,13 @@ if not ticker:
 # Run analysis when button clicked
 if analyze:
     with st.spinner("Running committee — fetching market data and running agents..."):
+        progress = st.progress(0, text="Fetching market data...")
         md = market_data.get_market_data(ticker)
         if md.get("error"):
             st.error(f"Market data error: {md.get('error')}")
             st.stop()
 
+        progress.progress(20, text="Running Monte Carlo simulations...")
         mc = monte_carlo.run_monte_carlo(ticker, num_sims=int(sims))
         if mc.get("error"):
             st.error(f"Monte Carlo error: {mc.get('error')}")
@@ -162,27 +164,34 @@ if analyze:
 
         # Run agents defensively
         agent_outputs = []
+        progress.progress(40, text="Value agent analyzing...")
         try:
             agent_outputs.append(value_agent.analyze(ticker, md))
         except Exception as e:
             agent_outputs.append({"agent": "value_agent", "ticker": ticker, "result": {"recommendation": "HOLD", "confidence": 40, "reason": f"error: {e}"}})
 
+        progress.progress(55, text="Growth agent analyzing...")
         try:
             agent_outputs.append(growth_agent.analyze(ticker, md))
         except Exception as e:
             agent_outputs.append({"agent": "growth_agent", "ticker": ticker, "result": {"recommendation": "HOLD", "confidence": 45, "reason": f"error: {e}"}})
 
+        progress.progress(70, text="Risk agent analyzing...")
         try:
             agent_outputs.append(risk_agent.analyze(ticker, md))
         except Exception as e:
             agent_outputs.append({"agent": "risk_agent", "ticker": ticker, "result": {"recommendation": "HOLD", "confidence": 60, "reason": f"error: {e}"}})
 
+        progress.progress(85, text="Quant agent analyzing...")
         try:
             agent_outputs.append(quant_agent.analyze(ticker, md, mc))
         except Exception as e:
             agent_outputs.append({"agent": "quant_agent", "ticker": ticker, "result": {"recommendation": "HOLD", "confidence": 50, "reason": f"error: {e}"}})
 
+        progress.progress(95, text="Chairperson aggregating votes...")
         final = chairperson_agent.aggregate(agent_outputs)
+        progress.progress(100, text="Done!")
+        progress.empty()
 
         # --- If compare mode selected, run full pipeline for second ticker ---
         final_b = None
@@ -279,16 +288,17 @@ if analyze:
                 mc_vol = compute_annualized_volatility(sim_arr)
                 # prefer Monte Carlo derived values if not provided by chair/market data
                 if mc_dd is not None:
-                    # keep decimal fraction (0.33 -> 33%)
-                    rr.setdefault("expected_drawdown_pct", mc_dd)
+                    rr["expected_drawdown_pct"] = mc_dd
                 if mc_vol is not None:
-                    rr.setdefault("volatility", mc_vol)
+                    rr["volatility"] = mc_vol
             except Exception:
                 pass
 
-        # basic risk fields from market data / monte carlo
-        rr.setdefault("volatility", md.get("annualized_volatility") or (mc.get("mc_params") or {}).get("annualized_volatility"))
-        rr.setdefault("expected_drawdown_pct", md.get("max_drawdown") or mc.get("max_drawdown"))
+        # basic risk fields from market data / monte carlo (only fill if still missing)
+        if not rr.get("volatility"):
+            rr["volatility"] = md.get("annualized_volatility") or (mc.get("mc_params") or {}).get("annualized_volatility")
+        if not rr.get("expected_drawdown_pct"):
+            rr["expected_drawdown_pct"] = md.get("max_drawdown") or mc.get("max_drawdown")
         prob_loss = mc.get("probability_loss_more_than_20")
         if not rr.get("tail_risk_comment"):
             if prob_loss is None:
@@ -423,6 +433,9 @@ if analyze:
         except Exception:
             conf_int = 10
         reason = res.get("reason", "")
+        # strip markdown backtick code spans that cause green highlighting
+        import re as _re
+        reason = _re.sub(r'`[^`]*`', lambda m: m.group(0)[1:-1], reason)
         badge_cls = badge_map.get(rec, "badge-hold")
         with votes_cols[i]:
             st.markdown(
@@ -432,8 +445,8 @@ if analyze:
                 f"</div>",
                 unsafe_allow_html=True,
             )
-            with st.expander("Reason (click to expand)"):
-                st.write(reason or "No reason provided.")
+            with st.expander("Reason", expanded=True):
+                st.markdown(f"<div style='color:#e6eef8'>{reason or 'No reason provided.'}</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
     st.write("")
 
@@ -479,21 +492,27 @@ if analyze:
 
                     if returns_pct.size > 0:
                         p5, p50, p95 = np.percentile(returns_pct, [5, 50, 95])
-                        fig, ax = plt.subplots(figsize=(6, 3))
-                        n, bins, patches = ax.hist(returns_pct, bins=50, edgecolor='black')
-                        # color bars by sign of bin center
+                        fig, ax = plt.subplots(figsize=(5, 2.5))
+                        fig.patch.set_facecolor("#0f1720")
+                        ax.set_facecolor("#0b0f14")
+                        n, bins, patches = ax.hist(returns_pct, bins=50, edgecolor='none')
                         for patch in patches:
                             center = patch.get_x() + patch.get_width() / 2.0
                             patch.set_facecolor("#16a34a" if center >= 0 else "#dc2626")
-                        ax.axvline(p5, color="gray", linestyle="--", linewidth=1, label=f"5th: {p5:.2f}%")
-                        ax.axvline(p50, color="blue", linestyle="--", linewidth=1, label=f"50th: {p50:.2f}%")
-                        ax.axvline(p95, color="gray", linestyle="--", linewidth=1, label=f"95th: {p95:.2f}%")
-                        ax.set_xlabel("1-Year Return (%)")
-                        ax.set_title("Distribution of 1-Year Returns (simulated)")
-                        ax.grid(alpha=0.2)
-                        ax.legend(loc="upper right", fontsize="small")
+                            patch.set_alpha(0.85)
+                        ax.axvline(p5, color="#9aa7b2", linestyle="--", linewidth=1, label=f"5th: {p5:.2f}%")
+                        ax.axvline(p50, color="#7dd3fc", linestyle="--", linewidth=1.5, label=f"50th: {p50:.2f}%")
+                        ax.axvline(p95, color="#9aa7b2", linestyle="--", linewidth=1, label=f"95th: {p95:.2f}%")
+                        ax.set_xlabel("1-Year Return (%)", color="#9aa7b2")
+                        ax.set_title("Distribution of 1-Year Returns (simulated)", color="#e6eef8")
+                        ax.grid(alpha=0.1, color="#9aa7b2")
+                        ax.tick_params(colors="#9aa7b2")
+                        ax.spines[:].set_color("#1e2a35")
+                        legend = ax.legend(loc="upper right", fontsize="small", facecolor="#0f1720", edgecolor="#1e2a35")
+                        for text in legend.get_texts():
+                            text.set_color("#e6eef8")
                         st.pyplot(fig)
-                        st.write(f"5th: {p5:.2f}% — 50th: {p50:.2f}% — 95th: {p95:.2f}%")
+                        st.markdown(f"<div class='small-muted'>5th: {p5:.2f}% — 50th: {p50:.2f}% — 95th: {p95:.2f}%</div>", unsafe_allow_html=True)
                 except Exception:
                     pass
         else:
@@ -661,11 +680,10 @@ if analyze:
             pdf_bytes = _make_pdf_bytes(final, md, mc, agent_outputs)
             st.download_button("Download PDF", data=pdf_bytes, file_name=f"{ticker}_report.pdf", mime="application/pdf")
     except Exception:
-        # fpdf not installed or error — show a small hint
-        st.markdown("<div style='margin-top:8px;color:var(--muted)'>Install `fpdf` to enable PDF export: python3 -m pip install fpdf</div>", unsafe_allow_html=True)
+        # fpdf not installed or error — silently skip PDF export
+        pass
 
     st.write("")
-    st.markdown("<div class='small-muted' style='margin-top:12px'>Enter a ticker and click Analyze to run the AI Investment Committee.</div>", unsafe_allow_html=True)
 
     # If comparing, render side-by-side metrics, votes, and overlaid MC paths + preference
     if mode == "Compare tickers" and second_ticker and final_b:
@@ -699,13 +717,15 @@ if analyze:
                     rec = (res.get("recommendation") or "HOLD").upper()
                     conf = res.get("confidence",50)
                     reason = res.get("reason","")
+                    import re as _re
+                    reason = _re.sub(r'`[^`]*`', lambda m: m.group(0)[1:-1], reason)
                     cls = badge_map.get(rec,"badge-hold")
                     st.markdown(f"<div style='display:flex;justify-content:space-between;align-items:center'>"
                                 f"<div><strong>{name}</strong></div>"
                                 f"<div class='agent-badge {cls}'>{rec} • {int(conf)}%</div>"
                                 f"</div>", unsafe_allow_html=True)
-                    with st.expander("Reason (click to expand)"):
-                        st.write(reason or "No reason provided.")
+                    with st.expander("Reason", expanded=True):
+                        st.markdown(f"<div style='color:#e6eef8'>{reason or 'No reason provided.'}</div>", unsafe_allow_html=True)
         _render_votes(agent_outputs, vcols[0])
         _render_votes(agent_outputs_b, vcols[1])
         # Overlaid Monte Carlo paths (sampled)
@@ -716,6 +736,8 @@ if analyze:
                 simA = np.asarray(sim_a, dtype=float)
                 simB = np.asarray(sim_b, dtype=float)
                 fig, ax = plt.subplots(figsize=(10,4))
+                fig.patch.set_facecolor("#0f1720")
+                ax.set_facecolor("#0b0f14")
                 # plot sample of paths (up to 100) for clarity
                 nplot = min(100, simA.shape[0])
                 for i in range(min(nplot, simA.shape[0])):
@@ -727,10 +749,15 @@ if analyze:
                 medB = np.median(simB, axis=0)
                 ax.plot(medA, color="#1e40af", linewidth=2.0, label=ticker + " median")
                 ax.plot(medB, color="#c2410c", linewidth=2.0, label=second_ticker + " median")
-                ax.set_title(f"Monte Carlo paths: {ticker} (blue) vs {second_ticker} (orange)")
-                ax.set_xlabel("Trading days")
-                ax.set_ylabel("Price")
-                ax.legend()
+                ax.set_title(f"Monte Carlo paths: {ticker} (blue) vs {second_ticker} (orange)", color="#e6eef8")
+                ax.set_xlabel("Trading days", color="#9aa7b2")
+                ax.set_ylabel("Price", color="#9aa7b2")
+                ax.tick_params(colors="#9aa7b2")
+                ax.spines[:].set_color("#1e2a35")
+                ax.grid(alpha=0.1, color="#9aa7b2")
+                legend = ax.legend(facecolor="#0f1720", edgecolor="#1e2a35")
+                for text in legend.get_texts():
+                    text.set_color("#e6eef8")
                 st.pyplot(fig)
             except Exception:
                 pass

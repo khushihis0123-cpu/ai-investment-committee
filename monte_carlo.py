@@ -119,6 +119,12 @@ def run_monte_carlo(ticker: str, num_sims: int = 1000, days: int = 252, outfile:
         plt.close()
 
         # Build result with mc_params metadata
+        # Build sim_paths matrix (num_sims x days+1) for downstream risk calculations
+        if cum_log_full is not None:
+            sim_paths_matrix = (S0 * np.exp(cum_log_full)).T  # shape: (num_sims, days+1)
+        else:
+            sim_paths_matrix = np.full((num_sims, days + 1), S0, dtype=float)
+
         result.update(
             {
                 "probability_gain_more_than_10": prob_gain,
@@ -127,6 +133,7 @@ def run_monte_carlo(ticker: str, num_sims: int = 1000, days: int = 252, outfile:
                 "percentile_50": p50,
                 "percentile_95": p95,
                 "ending_prices": [float(x) for x in ending_prices.tolist()],
+                "sim_paths": sim_paths_matrix.tolist(),  # full paths for risk metric computation
                 "plot_path": os.path.abspath(outfile),
                 "history_start": str(prices.index[0].date()),
                 "history_end": str(prices.index[-1].date()),
